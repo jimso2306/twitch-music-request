@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎵 Music Control</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      text-align: center;
+      font-size: 24px;
+      margin-bottom: 24px;
+      color: #a78bfa;
+    }
+    
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    .card-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #888;
+      margin-bottom: 16px;
+    }
+    
+    .now-playing {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    .now-playing-thumb {
+      width: 80px;
+      height: 80px;
+      border-radius: 12px;
+      object-fit: cover;
+      background: #333;
+    }
+    
+    .now-playing-info {
+      flex: 1;
+    }
+    
+    .now-playing-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    
+    .now-playing-artist {
+      font-size: 14px;
+      color: #aaa;
+      margin-bottom: 4px;
+    }
+    
+    .now-playing-user {
+      font-size: 12px;
+      color: #9147ff;
+    }
+    
+    .empty-state {
+      text-align: center;
+      color: #666;
+      padding: 20px;
+    }
+    
+    .btn {
+      border: none;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+      margin-top: 16px;
+    }
+    
+    .btn:active {
+      transform: scale(0.98);
+    }
+    
+    .btn-skip {
+      background: linear-gradient(135deg, #9147ff 0%, #7c3aed 100%);
+      color: white;
+    }
+    
+    .btn-skip:disabled {
+      background: #333;
+      color: #666;
+    }
+    
+    .queue-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    
+    .queue-number {
+      width: 28px;
+      height: 28px;
+      background: rgba(145, 71, 255, 0.3);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    
+    .queue-thumb {
+      width: 50px;
+      height: 50px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    
+    .queue-info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .queue-title {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    .queue-user {
+      font-size: 12px;
+      color: #888;
+    }
+    
+    .status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #666;
+      margin-top: 20px;
+    }
+    
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #00c853;
+    }
+    
+    .status-dot.offline {
+      background: #ff4444;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎵 Music Control</h1>
+    
+    <div class="card">
+      <div class="card-title">Now Playing</div>
+      <div id="now-playing">
+        <div class="empty-state">No music playing</div>
+      </div>
+      <button class="btn btn-skip" id="skip-btn" onclick="skip()" disabled>⏭ Skip</button>
+    </div>
+    
+    <div class="card">
+      <div class="card-title">Queue (<span id="queue-count">0</span>)</div>
+      <div id="queue-list">
+        <div class="empty-state">Queue is empty</div>
+      </div>
+    </div>
+    
+    <div class="status">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Connected</span>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    
+    socket.on('connect', () => {
+      document.getElementById('status-dot').classList.remove('offline');
+      document.getElementById('status-text').textContent = 'Connected';
+    });
+    
+    socket.on('disconnect', () => {
+      document.getElementById('status-dot').classList.add('offline');
+      document.getElementById('status-text').textContent = 'Disconnected';
+    });
+    
+    socket.on('queue-update', (data) => {
+      renderNowPlaying(data.currentSong);
+      renderQueue(data.queue);
+    });
+    
+    socket.on('loading', () => {
+      document.getElementById('now-playing').innerHTML = `
+        <div class="empty-state">⏳ Loading...</div>
+      `;
+    });
+    
+    function renderNowPlaying(song) {
+      const container = document.getElementById('now-playing');
+      const skipBtn = document.getElementById('skip-btn');
+      
+      if (song) {
+        container.innerHTML = `
+          <div class="now-playing">
+            <img class="now-playing-thumb" src="${song.thumbnail}" alt="">
+            <div class="now-playing-info">
+              <div class="now-playing-title">${escapeHtml(song.title)}</div>
+              <div class="now-playing-artist">${escapeHtml(song.author)}</div>
+              <div class="now-playing-user">👤 ${escapeHtml(song.user)}</div>
+            </div>
+          </div>
+        `;
+        skipBtn.disabled = false;
+      } else {
+        container.innerHTML = '<div class="empty-state">No music playing</div>';
+        skipBtn.disabled = true;
+      }
+    }
+    
+    function renderQueue(queue) {
+      const container = document.getElementById('queue-list');
+      document.getElementById('queue-count').textContent = queue.length;
+      
+      if (queue.length === 0) {
+        container.innerHTML = '<div class="empty-state">Queue is empty</div>';
+        return;
+      }
+      
+      container.innerHTML = queue.map((song, i) => `
+        <div class="queue-item">
+          <div class="queue-number">${i + 1}</div>
+          <img class="queue-thumb" src="${song.thumbnail}" alt="">
+          <div class="queue-info">
+            <div class="queue-title">${escapeHtml(song.title)}</div>
+            <div class="queue-user">👤 ${escapeHtml(song.user)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    function skip() {
+      socket.emit('skip');
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
