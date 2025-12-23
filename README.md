@@ -157,7 +157,7 @@ MIT - Utilise-le comme tu veux !
 ## 🤝 Contribution
 
 Les dons sont les bienvenus:
-https://ko-fi.com/jimsofer
+https://ko-fi.com/jymor
 
 ---
 
