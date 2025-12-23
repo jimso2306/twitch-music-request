@@ -4,8 +4,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const tmi = require('tmi.js');
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 // ═══════════════════════════════════════
 // CONFIG
@@ -14,6 +15,12 @@ const TWITCH_CHANNEL = process.env.TWITCH_CHANNEL;
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const PORT = process.env.PORT || 3000;
+const CACHE_DIR = path.join(__dirname, 'cache');
+
+// Create cache directory
+if (!fs.existsSync(CACHE_DIR)) {
+  fs.mkdirSync(CACHE_DIR);
+}
 
 if (!TWITCH_CHANNEL || !DISCORD_TOKEN || !DISCORD_CHANNEL_ID) {
   console.error('❌ Missing configuration!');
@@ -25,14 +32,78 @@ if (!TWITCH_CHANNEL || !DISCORD_TOKEN || !DISCORD_CHANNEL_ID) {
 }
 
 // ═══════════════════════════════════════
-// MUSIC PLAYER (mpv)
+// MUSIC PLAYER (mpv + preloading)
 // ═══════════════════════════════════════
 const queue = [];
 let currentSong = null;
 let mpvProcess = null;
 let isPlaying = false;
+const downloadingSet = new Set();
+
+// Preload a song (download audio)
+function preloadSong(song) {
+  if (downloadingSet.has(song.videoId)) return;
+  
+  const filePath = path.join(CACHE_DIR, `${song.videoId}.opus`);
+  if (fs.existsSync(filePath)) {
+    song.filePath = filePath;
+    console.log(`📦 Already cached: ${song.title}`);
+    return;
+  }
+  
+  downloadingSet.add(song.videoId);
+  console.log(`⬇️ Preloading: ${song.title}`);
+  
+  const url = `https://www.youtube.com/watch?v=${song.videoId}`;
+  const ytdlp = spawn('yt-dlp', [
+    '-x',
+    '--audio-format', 'opus',
+    '-o', filePath,
+    '--no-playlist',
+    '-q',
+    url
+  ]);
+  
+  ytdlp.on('close', (code) => {
+    downloadingSet.delete(song.videoId);
+    if (code === 0 && fs.existsSync(filePath)) {
+      song.filePath = filePath;
+      console.log(`✅ Preloaded: ${song.title}`);
+    } else {
+      console.log(`⚠️ Preload failed: ${song.title}`);
+    }
+  });
+  
+  ytdlp.on('error', () => {
+    downloadingSet.delete(song.videoId);
+  });
+}
+
+// Preload next songs in queue
+function preloadQueue() {
+  queue.slice(0, 2).forEach(song => preloadSong(song));
+}
+
+// Clean old cache files
+function cleanCache() {
+  const files = fs.readdirSync(CACHE_DIR);
+  const activeIds = new Set([
+    currentSong?.videoId,
+    ...queue.map(s => s.videoId)
+  ].filter(Boolean));
+  
+  files.forEach(file => {
+    const videoId = file.replace('.opus', '');
+    if (!activeIds.has(videoId)) {
+      fs.unlinkSync(path.join(CACHE_DIR, file));
+    }
+  });
+}
 
 function playNext() {
+  // Clean old files
+  cleanCache();
+  
   if (queue.length === 0) {
     currentSong = null;
     isPlaying = false;
@@ -43,24 +114,37 @@ function playNext() {
 
   currentSong = queue.shift();
   isPlaying = true;
-  console.log(`⏳ Loading: ${currentSong.title}`);
-  io.emit('loading');
   io.emit('queue-update', { queue, currentSong });
+  
+  // Preload next songs
+  preloadQueue();
 
   if (mpvProcess) {
     mpvProcess.kill();
   }
 
-  const url = `https://www.youtube.com/watch?v=${currentSong.videoId}`;
-  mpvProcess = spawn('mpv', [
-    '--no-video',
-    '--really-quiet',
-    '--cache=yes',
-    '--cache-secs=5',
-    '--demuxer-max-bytes=50M',
-    '--ytdl-format=bestaudio',
-    url
-  ]);
+  // Use cached file if available, otherwise stream
+  if (currentSong.filePath && fs.existsSync(currentSong.filePath)) {
+    console.log(`▶️ Playing (cached): ${currentSong.title}`);
+    mpvProcess = spawn('mpv', [
+      '--no-video',
+      '--really-quiet',
+      currentSong.filePath
+    ]);
+  } else {
+    console.log(`⏳ Playing (streaming): ${currentSong.title}`);
+    io.emit('loading');
+    const url = `https://www.youtube.com/watch?v=${currentSong.videoId}`;
+    mpvProcess = spawn('mpv', [
+      '--no-video',
+      '--really-quiet',
+      '--cache=yes',
+      '--cache-secs=5',
+      '--demuxer-max-bytes=50M',
+      '--ytdl-format=bestaudio',
+      url
+    ]);
+  }
 
   mpvProcess.on('spawn', () => {
     console.log(`▶️ Playing: ${currentSong.title}`);
@@ -73,7 +157,6 @@ function playNext() {
 
   mpvProcess.on('error', (err) => {
     console.error('❌ mpv error:', err.message);
-    console.error('   Make sure mpv is installed: https://mpv.io');
     playNext();
   });
 }
@@ -133,6 +216,9 @@ discord.on('interactionCreate', async (interaction) => {
 
     await interaction.update({ embeds: [embed], components: [] });
     console.log(`✅ Approved: ${request.title}`);
+
+    // Start preloading this song
+    preloadSong(request);
 
     if (!isPlaying) {
       playNext();
