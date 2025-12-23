@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Now Playing</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background: transparent;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      padding: 10px;
+    }
+    
+    .now-playing {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 20px 14px 14px;
+      border-radius: 20px;
+      max-width: 400px;
+      
+      /* Glass effect mais lisible */
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 
+        0 8px 32px rgba(0, 0, 0, 0.4),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+      
+      /* Animation */
+      opacity: 1;
+      transform: translateY(0);
+      transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    
+    .now-playing.hidden {
+      opacity: 0;
+      transform: translateY(15px);
+      pointer-events: none;
+    }
+    
+    .thumbnail-container {
+      position: relative;
+      flex-shrink: 0;
+    }
+    
+    .thumbnail {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    }
+    
+    .playing-indicator {
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, #9147ff 0%, #7c3aed 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 10px rgba(145, 71, 255, 0.6);
+      border: 2px solid rgba(0, 0, 0, 0.65);
+    }
+    
+    .bars {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 2px;
+      height: 12px;
+    }
+    
+    .bar {
+      width: 3px;
+      background: white;
+      border-radius: 3px;
+      animation: soundwave 0.5s ease-in-out infinite;
+    }
+    
+    .bar:nth-child(1) { height: 5px; animation-delay: 0s; }
+    .bar:nth-child(2) { height: 10px; animation-delay: 0.15s; }
+    .bar:nth-child(3) { height: 6px; animation-delay: 0.3s; }
+    
+    @keyframes soundwave {
+      0%, 100% { transform: scaleY(0.4); }
+      50% { transform: scaleY(1.2); }
+    }
+    
+    .info {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #a78bfa;
+      letter-spacing: 1.5px;
+      margin-bottom: 6px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    }
+    
+    .title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    }
+    
+    .artist {
+      font-size: 13px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.75);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 8px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    }
+    
+    .requested {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: white;
+      background: rgba(145, 71, 255, 0.4);
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(145, 71, 255, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div class="now-playing hidden" id="nowplaying">
+    <div class="thumbnail-container">
+      <img class="thumbnail" id="thumb" src="" alt="">
+      <div class="playing-indicator">
+        <div class="bars">
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+      </div>
+    </div>
+    <div class="info">
+      <div class="label">♪ Now Playing</div>
+      <div class="title" id="title">-</div>
+      <div class="artist" id="artist">-</div>
+      <div class="requested">demandé par <span id="user">-</span></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    
+    socket.on('queue-update', (data) => {
+      const container = document.getElementById('nowplaying');
+      
+      if (data.currentSong) {
+        document.getElementById('thumb').src = data.currentSong.thumbnail;
+        document.getElementById('title').textContent = data.currentSong.title;
+        document.getElementById('artist').textContent = data.currentSong.author;
+        document.getElementById('user').textContent = data.currentSong.user;
+        container.classList.remove('hidden');
+      } else {
+        container.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
