@@ -156,7 +156,7 @@ MIT - Utilise-le comme tu veux !
 
 ## 🤝 Contribution
 
-Les dons sont les bienvenues:
+Les dons sont les bienvenus:
 https://ko-fi.com/jimsofer
 
 ---
