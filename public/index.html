@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -182,6 +182,44 @@
     .status-dot.offline {
       background: #ff4444;
     }
+    
+    .volume-control {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    
+    .volume-icon {
+      font-size: 20px;
+    }
+    
+    .volume-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 8px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.1);
+      outline: none;
+    }
+    
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #9147ff;
+      cursor: pointer;
+    }
+    
+    .volume-value {
+      min-width: 40px;
+      text-align: right;
+      font-size: 14px;
+      color: #888;
+    }
   </style>
 </head>
 <body>
@@ -189,23 +227,29 @@
     <h1>🎵 Music Control</h1>
     
     <div class="card">
-      <div class="card-title">Now Playing</div>
+      <div class="card-title">En lecture</div>
       <div id="now-playing">
-        <div class="empty-state">No music playing</div>
+        <div class="empty-state">Aucune musique en cours</div>
       </div>
-      <button class="btn btn-skip" id="skip-btn" onclick="skip()" disabled>⏭ Skip</button>
+      <button class="btn btn-skip" id="skip-btn" onclick="skip()" disabled>⏭ Passer</button>
+      
+      <div class="volume-control">
+        <span class="volume-icon" id="volume-icon">🔊</span>
+        <input type="range" class="volume-slider" id="volume-slider" min="0" max="100" value="100" oninput="setVolume(this.value)">
+        <span class="volume-value" id="volume-value">100%</span>
+      </div>
     </div>
     
     <div class="card">
-      <div class="card-title">Queue (<span id="queue-count">0</span>)</div>
+      <div class="card-title">File d'attente (<span id="queue-count">0</span>)</div>
       <div id="queue-list">
-        <div class="empty-state">Queue is empty</div>
+        <div class="empty-state">File d'attente vide</div>
       </div>
     </div>
     
     <div class="status">
       <div class="status-dot" id="status-dot"></div>
-      <span id="status-text">Connected</span>
+      <span id="status-text">Connecté</span>
     </div>
   </div>
 
@@ -215,12 +259,12 @@
     
     socket.on('connect', () => {
       document.getElementById('status-dot').classList.remove('offline');
-      document.getElementById('status-text').textContent = 'Connected';
+      document.getElementById('status-text').textContent = 'Connecté';
     });
     
     socket.on('disconnect', () => {
       document.getElementById('status-dot').classList.add('offline');
-      document.getElementById('status-text').textContent = 'Disconnected';
+      document.getElementById('status-text').textContent = 'Déconnecté';
     });
     
     socket.on('queue-update', (data) => {
@@ -230,7 +274,7 @@
     
     socket.on('loading', () => {
       document.getElementById('now-playing').innerHTML = `
-        <div class="empty-state">⏳ Loading...</div>
+        <div class="empty-state">⏳ Chargement...</div>
       `;
     });
     
@@ -251,7 +295,7 @@
         `;
         skipBtn.disabled = false;
       } else {
-        container.innerHTML = '<div class="empty-state">No music playing</div>';
+        container.innerHTML = '<div class="empty-state">Aucune musique en cours</div>';
         skipBtn.disabled = true;
       }
     }
@@ -261,7 +305,7 @@
       document.getElementById('queue-count').textContent = queue.length;
       
       if (queue.length === 0) {
-        container.innerHTML = '<div class="empty-state">Queue is empty</div>';
+        container.innerHTML = '<div class="empty-state">File d\'attente vide</div>';
         return;
       }
       
@@ -280,6 +324,18 @@
     function skip() {
       socket.emit('skip');
     }
+    
+    function setVolume(value) {
+      document.getElementById('volume-value').textContent = value + '%';
+      document.getElementById('volume-icon').textContent = value == 0 ? '🔇' : value < 50 ? '🔉' : '🔊';
+      socket.emit('volume', parseInt(value));
+    }
+    
+    socket.on('volume-update', (value) => {
+      document.getElementById('volume-slider').value = value;
+      document.getElementById('volume-value').textContent = value + '%';
+      document.getElementById('volume-icon').textContent = value == 0 ? '🔇' : value < 50 ? '🔉' : '🔊';
+    });
     
     function escapeHtml(text) {
       const div = document.createElement('div');
